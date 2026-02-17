@@ -1,0 +1,4 @@
+Questions
+*.logs
+.venv/
+__pycache__/
