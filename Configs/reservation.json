@@ -1,0 +1,19 @@
+{
+    "Reservations": [
+        {
+            "Instances": [
+                {
+                    "ImageId": "ami-789012",
+                    "InstanceType": "t2.micro",
+                    "LaunchTime": "2026-02-18T13:39:22",
+                    "Tags": [
+                        {
+                            "Key": "Name",
+                            "Value": "test-1"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

@@ -1,104 +1,164 @@
-
-# Simulating Infrastructure Provisioning
-# Accepting User Input & Validation
-# • The tool should allow users to define machines dynamically.
-# • Input should be validated to ensure correctness.
-# • Store configurations in a JSON file (configs/instances.json).
-# • Use a library like  pydantic for validation.
-# Task:
-# • Create a function to prompt users for input.
-# • Implement validation to reject invalid inputs.
-# • Store the collected data in instances.json.
-# Hint: Think about what fields a VM requires (e.g., name, OS, CPU, RAM) and ensure
-# users enter valid values.
-# i want to create option for the user to choose the OS from a predefined list (e.g., Ubuntu, CentOS) and validate the input accordingly.
-# also i want the user to choose the CPU and RAM from a predefined range (e.g., CPU: 1-4 cores, RAM: 1-4 GB) and validate the input accordingly.
-# the user need to choose name for the machine validate that the name is not empty and have to be str and not any other type.
-# the user can choose number of machines to create and validate that the number is a positive integer.
-# Dont use @validator from pydantic use custom validation functions instead.
-# the user need to set only name, amount of machines, os, cpu and ram for all the machines and the tool will create the same configuration for all the machines.
-# i want it to validate the input for any option the user choose, if the user choose invalid input it should show error msg and ask for the input again until the user provides valid input.
-# the user set amount of machines but the tool will create the same configuration for all the machines, so the user need to set only one configuration and the tool will replicate it for the number of machines specified.
-
 import json
-from pydantic import BaseModel, ValidationError
+import logging
+import logging.handlers
+from datetime import datetime
 from typing import List
-class VMConfig(BaseModel):
-    name: str
-    os: str
-    cpu: int
-    ram: int
+from pydantic import BaseModel, ValidationError
 
-    def validate_name(self):
-        if not self.name or not isinstance(self.name, str):
-            raise ValueError('Name must be a non-empty string')
+# --- Configuration ---
+LOG_FILE_PATH = "./Logs/app.log"
+CONFIG_FILE_PATH = "./Configs/reservation.json"
+OS_DATA_PATH = "./Src/os_ids.json"
 
-    def validate_os(self):
-        valid_os = ['Ubuntu', 'CentOS']
-        if self.os not in valid_os:
-            raise ValueError(f'OS must be one of {valid_os}')
+# --- Logging Setup ---
+logger = logging.getLogger("CloudTool")
+logger.setLevel(logging.INFO)
 
-    def validate_cpu(self):
-        if not (1 <= self.cpu <= 4):
-            raise ValueError('CPU must be between 1 and 4 cores')
+# 'a' mode appends to the log file
+file_handler = logging.handlers.RotatingFileHandler(
+    LOG_FILE_PATH, maxBytes=1024*1024, backupCount=1, mode='a'
+)
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
 
-    def validate_ram(self):
-        if not (1 <= self.ram <= 4):
-            raise ValueError('RAM must be between 1 and 4 GB')
+# --- Pydantic Models ---
+class TagModel(BaseModel):
+    Key: str
+    Value: str
 
-def get_user_input() -> List[VMConfig]:
-    vm_configs = []
+class InstanceModel(BaseModel):
+    ImageId: str
+    InstanceType: str
+    LaunchTime: str
+    Tags: List[TagModel]
+
+class ReservationModel(BaseModel):
+    Instances: List[InstanceModel]
+
+class RootModel(BaseModel):
+    Reservations: List[ReservationModel]
+
+# --- Main Logic ---
+def main():
+    print("--- Start Provisioning ---")
+
+    # 1. Load OS Data
+    try:
+        with open(OS_DATA_PATH, 'r') as f:
+            os_data = json.load(f)
+    except FileNotFoundError:
+        # LOG LEVEL: ERROR (Missing file)
+        msg = f"Critical Error: The source file {OS_DATA_PATH} was not found."
+        logger.error(msg)
+        print("Error: Source file missing. Check logs.")
+        return
+    except json.JSONDecodeError:
+        # LOG LEVEL: ERROR (Corrupt file)
+        msg = f"Critical Error: The file {OS_DATA_PATH} contains invalid JSON."
+        logger.error(msg)
+        print("Error: Source file is corrupt. Check logs.")
+        return
+
+    # --- User Input Section ---
+
+    # 2. Input: Machine Count (1-10)
+    count = 0
     while True:
-        try:
-            num_machines = int(input("Enter the number of machines to create: "))
-            if num_machines <= 0:
-                raise ValueError("Number of machines must be a positive integer")
-            break
-        except ValueError as e:
-            print(f"Invalid input: {e}. Please try again.")
-    for _ in range(num_machines):
-        while True:
-            name = input("Enter machine name: ")
-            if not name or not isinstance(name, str):
-                print("Invalid input: Name must be a non-empty string. Please try again.")
-            else:
+        val = input("Enter count (1-10): ")
+        if val.isdigit():
+            int_val = int(val)
+            if 1 <= int_val <= 10:
+                count = int_val
                 break
-        while True:
-            os = input("Choose OS (Ubuntu/CentOS): ")
-            if os not in ['Ubuntu', 'CentOS']:
-                print("Invalid input: OS must be one of ['Ubuntu', 'CentOS']. Please try again.")
-            else:
-                break
-        while True:
-            try:
-                cpu = int(input("Enter CPU cores (1-4): "))
-                if not (1 <= cpu <= 4):
-                    raise ValueError("CPU must be between 1 and 4 cores")
-                break
-            except ValueError as e:
-                print(f"Invalid input: {e}. Please try again.")
-        while True:
-            try:
-                ram = int(input("Enter RAM in GB (1-4): "))
-                if not (1 <= ram <= 4):
-                    raise ValueError("RAM must be between 1 and 4 GB")
-                break
-            except ValueError as e:
-                print(f"Invalid input: {e}. Please try again.")
-        try:
-            vm_config = VMConfig(name=name, os=os, cpu=cpu, ram=ram)
-            vm_configs.append(vm_config)
-        except ValidationError as e:
-            print(f"Validation error: {e}")
-    return vm_configs
-
-
-def save_configs_to_json(vm_configs: List[VMConfig]):
-    with open('configs/instances.json', 'w') as f:
-        json.dump([vm.dict() for vm in vm_configs], f, indent=4)
         
+        # LOG LEVEL: ERROR (User Input Error)
+        logger.error(f"Invalid count input: '{val}'. Must be between 1 and 10.")
+        print("Error: Please enter a number between 1 and 10.")
+
+    # 3. Input: Machine Name
+    base_name = ""
+    while True:
+        val = input("Enter machine base name: ")
+        if len(val.strip()) > 0:
+            base_name = val
+            break
+        
+        # LOG LEVEL: ERROR (User Input Error)
+        logger.error("Invalid name input: Empty string provided.")
+        print("Error: Name cannot be empty.")
+
+    # 4. Input: OS Selection
+    os_key = ""
+    while True:
+        val = input("Enter OS (ubuntu/centos): ").lower()
+        if val in ["ubuntu", "centos"]:
+            os_key = val
+            break
+        
+        # LOG LEVEL: ERROR (User Input Error)
+        logger.error(f"Invalid OS input: '{val}'. Must be ubuntu or centos.")
+        print("Error: Must be 'ubuntu' or 'centos'.")
+
+    # 5. Input: Machine Type
+    type_choice = ""
+    print("1. T2micro (VCPU- 2, RAM- 1GB)\n2. T2nano (VCPU- 1, RAM- 0.5GB)")
+    while True:
+        val = input("Select type (1 or 2): ")
+        if val in ["1", "2"]:
+            type_choice = val
+            break
+        
+        # LOG LEVEL: ERROR (User Input Error)
+        logger.error(f"Invalid type input: '{val}'. Must be 1 or 2.")
+        print("Error: Must be 1 or 2.")
+
+    # --- Processing & Output ---
+
+    try:
+        # Prepare Data
+        ami = os_data.get(os_key, "ami-unknown")
+        i_type = "t2.micro" if type_choice == "1" else "t2.nano"
+        launch_time = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+
+        instances_list = []
+
+        # Generate Instances
+        for i in range(1, count + 1):
+            name_val = f"{base_name}-{i}"
+            
+            instance = InstanceModel(
+                ImageId=ami,
+                InstanceType=i_type,
+                LaunchTime=launch_time,
+                Tags=[
+                    TagModel(Key="Name", Value=name_val)
+                ]
+            )
+            instances_list.append(instance)
+
+        # Build Final Structure
+        # Root -> Reservations (List) -> Item -> Instances (List)
+        reservation = ReservationModel(Instances=instances_list)
+        final_output = RootModel(Reservations=[reservation])
+
+        # Write to JSON
+        with open(CONFIG_FILE_PATH, 'w') as f:
+            f.write(final_output.model_dump_json(indent=4))
+
+        # LOG LEVEL: INFO (Success)
+        success_msg = f"Successfully created configuration for {count} instances in {CONFIG_FILE_PATH}"
+        logger.info(success_msg)
+        print(f"Success! Configuration saved. \nCreated configuration for {count} instances in {CONFIG_FILE_PATH}. \nYou can check the logs for details in Logs/app.log.")
+
+    except ValidationError as e:
+        # LOG LEVEL: ERROR (Code/Data structure failure)
+        logger.error(f"Internal Validation Error: {e}")
+        print("System Error: Data validation failed.")
+    except Exception as e:
+        # LOG LEVEL: ERROR (Unexpected crash)
+        logger.error(f"Unexpected System Error: {e}")
+        print("An unexpected error occurred.")
+
 if __name__ == "__main__":
-    vm_configs = get_user_input()
-    save_configs_to_json(vm_configs)
-    print("Configurations saved to configs/instances.json")
-    
+    main()
