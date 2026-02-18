@@ -1,0 +1,6 @@
+Questions
+*.logs
+*.log
+.venv/
+__pycache__/
+reservation.json
