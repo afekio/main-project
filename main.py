@@ -215,6 +215,10 @@ def main():
     try:
         f_logger.info("--- Tool Execution Started ---")
         c_logger.info("--- Start Provisioning ---")
+        print("Tool to provision EC2 instances with Nginx installation. Please follow the prompts below.\n")
+        print("All actions and errors will be logged to ./Logs/app.log for your reference.\n")
+        print("All provisioning steps will be logged to ./Logs/app.log for your reference.\n")
+        print("Let's get started!\n")
 
         os_data = load_os_data(f_logger, c_logger)
         if os_data is None:
