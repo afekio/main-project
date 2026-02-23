@@ -19,8 +19,8 @@ Upon successful validation and generation of the JSON configuration, the tool si
 ## 🛠️ Getting Started
 
 ### Prerequisites
-* Python 3.12.3 (or compatible 3.x version) installed on your machine.
-* `pip` (Python package installer).
+* Python 3.12.3 (or compatible 3.x version) installed on your machine.  [Download Python](https://www.python.org/downloads/)
+* `pip` (Python package installer). - [Installing Pip](https://packaging.python.org/en/latest/tutorials/installing-packages/)
 
 ### 📦 Installation & Setup
 
