@@ -29,7 +29,7 @@ Upon successful validation and generation of the JSON configuration, the tool si
 git clone [https://github.com/afekio/main-project.git](https://github.com/afekio/main-project.git)
 cd main-project
 ```
-Warning: Do not alter the names of any files or directories. The tool relies on this exact structure to function correctly.
+## ⚠️ Warning: Do not change the names of any files or directories. The tool relies on this exact structure to function correctly.
 
 **2. Create a Virtual Environment**
 It is highly recommended to run this tool inside an isolated Python virtual environment.
