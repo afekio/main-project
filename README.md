@@ -21,7 +21,16 @@ Upon successful validation and generation of the JSON configuration, the tool si
 ### Prerequisites
 * Python 3.12.3 (or compatible 3.x version) installed on your machine.  [Download Python](https://www.python.org/downloads/)
 * `pip` (Python package installer). - [Installing Pip](https://packaging.python.org/en/latest/tutorials/installing-packages/)
-
+* pip ubuntu/debian
+```
+sudo apt update ; sudo apt install python3-pip -y
+```
+* pip for centos/rocky
+```
+sudo yum update -y
+sudo yum install epel-release -y
+sudo yum install python-pip -y
+```
 ### 📦 Installation & Setup
 
 **1. Clone the repository**
