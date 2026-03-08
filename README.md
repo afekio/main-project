@@ -26,7 +26,7 @@ Upon successful validation and generation of the JSON configuration, the tool si
 
 **1. Clone the repository**
 ```bash
-git clone [https://github.com/afekio/main-project.git](https://github.com/afekio/main-project.git)
+git clone https://github.com/afekio/main-project.git
 cd main-project
 ```
 ## ⚠️ Warning: Do not change the names of any files or directories. The tool relies on this exact structure to function correctly.
