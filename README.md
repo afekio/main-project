@@ -4,17 +4,10 @@
 ![Pydantic Version](https://img.shields.io/badge/pydantic-2.12.5-e92063.svg)
 
 ## 📖 Overview
-This is a straightforward provisioning tool designed to prepare a `.json` configuration file for deploying AWS EC2 instances. The tool guides the user through selecting instance parameters, rigorously validating each input, and logging the entire process. 
+What this tool does:
+This tool makes AWS EC2 deployment simple. It helps you generate a validated .json configuration file through an easy step-by-step process.
 
-Upon successful validation and generation of the JSON configuration, the tool simulates a real-world cloud deployment. It utilizes a Python `subprocess` to automatically trigger an OS-specific Bash script that installs the Nginx package on the target machine based on the operating system chosen during the provisioning phase.
-
-## ✨ Features
-* **🖥️ Interactive Provisioning:** Guides users through EC2 configuration (Count, Name, OS, Instance Type).
-* **🛡️ Strict Validation:** Ensures all user inputs meet the required criteria before proceeding.
-* **📝 Comprehensive Logging:** Logs errors, warnings, and success messages to both the console and a dedicated log file.
-* **⚙️ Automated JSON Generation:** Outputs a structured, AWS-ready JSON configuration file.
-* **🐧 OS-Specific Deployment:** Automatically detects the chosen OS (Ubuntu or CentOS) and runs the corresponding Bash script to install Nginx.
-
+Once your config is ready, the tool triggers a Python subprocess to run a Bash script. This automatically installs Nginx on your instance, tailored specifically to the
 
 ## 🛠️ Getting Started
 
