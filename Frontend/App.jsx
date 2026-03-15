@@ -6,7 +6,7 @@ const ProvisionForm = () => {
     baseName: '',
     osKey: '',
     typeChoice: '',
-    installScript: '' // Empty by default to force user selection
+    installScript: ''
   });
 
   const [errors, setErrors] = useState({});
