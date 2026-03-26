@@ -1,7 +1,7 @@
 services:
   backend:
     container_name: backend
-    image: back-app:latest
+    image: app-backend:latest
     restart: always
     ports:
       - "5000:5000"
@@ -11,9 +11,25 @@ services:
 
   frontend:
     container_name: frontend
-    image: front-app:latest
+    image: app-frontend:latest
     restart: always
     ports:
       - "80:80"
     depends_on:
       - backend
+
+
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: securepassword123
+      POSTGRES_DB: provision_db
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+volumes:
+   pgdata:

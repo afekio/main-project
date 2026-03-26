@@ -1,0 +1,7 @@
+__pycache__
+.venv
+Backend
+Frontend
+docker-compose.yml
+GITGUB-URL.txt
+README.md

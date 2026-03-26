@@ -1,5 +1,6 @@
 Questions
 *.logs
+.aws
 *.log
 .venv/
 __pycache__/
