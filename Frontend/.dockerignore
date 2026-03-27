@@ -1,0 +1,6 @@
+# Ignore node_modules so Docker builds fresh ones
+node_modules
+npm-debug.log
+build
+dist
+.env

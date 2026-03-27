@@ -10,7 +10,7 @@ from pydantic import ValidationError
 import jwt
 import datetime
 
-# Import DB and Models (Notice DeploymentHistory is added)
+# Import DB and Models 
 from Src.db import db, User, DeploymentHistory
 
 # Import existing logic from your modules
@@ -96,7 +96,8 @@ def register():
     db.session.add(new_user)
     db.session.commit()
     
-    f_logger.info(f"New user registered: {new_user.username}")
+    # Log successful user creation
+    f_logger.info(f"Action: REGISTER | Status: SUCCESS | User: {new_user.username} created successfully.")
     return jsonify({'message': 'User registered successfully'}), 201
 
 
@@ -115,14 +116,16 @@ def login():
             'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
         }, app.config['SECRET_KEY'], algorithm="HS256")
         
-        f_logger.info(f"Successful login for user: {user.username}")
+        # Log successful login
+        f_logger.info(f"Action: LOGIN | Status: SUCCESS | User: {user.username} logged in successfully.")
         return jsonify({
             'message': 'Login successful',
             'token': token,
             'user': {'username': user.username, 'fullName': user.full_name, 'email': user.email}
         }), 200
         
-    f_logger.warning(f"Failed login attempt for username: {data.get('username')}")
+    # Log failed login attempt (fixed indentation)
+    f_logger.warning(f"Action: LOGIN | Status: FAILED | Attempted Username: {data.get('username')}")
     return jsonify({'error': 'Invalid username or password'}), 401
 
 
@@ -140,26 +143,9 @@ def get_profile(current_user):
     }), 200
 
 
-@app.route('/api/user/file/<int:file_id>', methods=['GET'])
-@token_required
-def get_user_file(current_user, file_id):
-    """Returns the actual content of a specific file, ONLY if the user owns it"""
-    deployment = DeploymentHistory.query.filter_by(id=file_id, user_id=current_user.id).first()
-    
-    if not deployment:
-        return jsonify({'error': 'File not found or unauthorized access'}), 404
-        
-    return jsonify({
-        'fileName': deployment.file_name,
-        'fileType': deployment.file_type,
-        'content': deployment.file_content
-    }), 200
-
-
 @app.route('/api/user/change-password', methods=['POST'])
 @token_required
 def change_password(current_user):
-    """Allows user to change their password securely"""
     data = request.get_json()
     old_password = data.get('oldPassword')
     new_password = data.get('newPassword')
@@ -172,8 +158,33 @@ def change_password(current_user):
         
     current_user.set_password(new_password)
     db.session.commit()
-    f_logger.info(f"User {current_user.username} changed their password.")
+    
+    # Log password reset
+    f_logger.info(f"Action: PASSWORD_RESET | Status: SUCCESS | User: {current_user.username} reset their password.")
     return jsonify({'message': 'Password updated successfully'}), 200
+
+
+@app.route('/api/user/file/<int:file_id>', methods=['GET'])
+@token_required
+def get_user_file(current_user, file_id):
+    deployment = DeploymentHistory.query.filter_by(id=file_id, user_id=current_user.id).first()
+    
+    if not deployment:
+        return jsonify({'error': 'File not found or unauthorized access'}), 404
+        
+    # Identify if the user viewed or downloaded the file using a query parameter
+    action = request.args.get('action', 'view')
+    
+    if action == 'download':
+        f_logger.info(f"Action: FILE_DOWNLOAD | Status: SUCCESS | User: {current_user.username} downloaded file: {deployment.file_name}")
+    else:
+        f_logger.info(f"Action: FILE_VIEW | Status: SUCCESS | User: {current_user.username} viewed file: {deployment.file_name}")
+        
+    return jsonify({
+        'fileName': deployment.file_name,
+        'fileType': deployment.file_type,
+        'content': deployment.file_content
+    }), 200
 
 
 # --- Provisioning Logic ---
@@ -297,8 +308,8 @@ def run_bash_installation(os_key: str) -> bool:
         return False
 
 @app.route('/api/provision', methods=['POST'])
-@token_required # <--- SECURED ROUTE: User must be logged in
-def provision(current_user): # <--- Current user is injected automatically
+@token_required
+def provision(current_user):
     if not request.is_json:
         return jsonify({"error": "Request must be JSON"}), 400
         
@@ -348,7 +359,6 @@ def provision(current_user): # <--- Current user is injected automatically
     extension = 'tf' if infra_type == 'terraform' else 'json'
     db_file_name = f"{base_name}_{timestamp}.{extension}"
     
-    # Store string directly if TF, or dump dict to string if JSON
     content_to_save = response_payload if isinstance(response_payload, str) else json.dumps(response_payload, indent=2)
     
     new_deployment = DeploymentHistory(

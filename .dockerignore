@@ -2,6 +2,7 @@ __pycache__
 .venv
 Backend
 Frontend
+front
 docker-compose.yml
 GITGUB-URL.txt
 README.md

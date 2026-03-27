@@ -1,19 +1,17 @@
 import React, { useState, useEffect } from 'react';
 
-// 1. Emoji Bank & Helper
+// --- Emoji Bank & Helper ---
 const EMOJI_BANK = [
   '😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂', '🙂', '🙃', '😉', '😊', '😇', '🥰', '😍', '🤩', 
   '🚀', '🛸', '🛰️', '🚁', '🛶', '💻', '🖥️', '🖨️', '🖱️', '🖲️', '🕹️', '🗜️', '⚙️', '🛠️', '🔧', '🔨'
 ];
 
 const createRandomEmoji = () => {
-  const emoji = EMOJI_BANK[Math.floor(Math.random() * EMOJI_BANK.length)];
   const side = Math.random() > 0.5 ? 'left' : 'right';
   const horizontalOffset = side === 'left' ? (Math.random() * 8 + 2) : (Math.random() * 8 + 90); 
-    
   return {
     id: Date.now() + Math.random(),
-    char: emoji,
+    char: EMOJI_BANK[Math.floor(Math.random() * EMOJI_BANK.length)],
     style: {
       left: `${horizontalOffset}vw`,
       animationDuration: `${Math.random() * 5 + 3}s`,
@@ -24,8 +22,17 @@ const createRandomEmoji = () => {
   };
 };
 
+const createFirework = () => ({
+  id: Date.now() + Math.random(),
+  style: {
+    left: `${Math.random() * 80 + 10}vw`,
+    top: `${Math.random() * 60 + 10}vh`,
+    animationDuration: `${Math.random() * 1 + 0.5}s`,
+  }
+});
+
 const ProvisionForm = () => {
-  // --- Auth State ---
+  // --- Auth & User State ---
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -34,12 +41,15 @@ const ProvisionForm = () => {
   const [authMessage, setAuthMessage] = useState({ text: '', type: '' });
 
   // --- View State ---
-  const [currentView, setCurrentView] = useState('form'); // 'form' or 'profile'
+  const [currentView, setCurrentView] = useState('form'); 
   
-  // --- Profile State ---
+  // --- Profile & Password State ---
   const [profileData, setProfileData] = useState({ files: [] });
-  const [passwordData, setPasswordData] = useState({ oldPassword: '', newPassword: '' });
+  const [showPwdModal, setShowPwdModal] = useState(false);
+  const [passwordData, setPasswordData] = useState({ oldPassword: '', newPassword: '', rePassword: '' });
   const [pwdMessage, setPwdMessage] = useState({ text: '', type: '' });
+  const [showFireworks, setShowFireworks] = useState(false);
+  const [fireworksArr, setFireworksArr] = useState([]);
   const [viewingFile, setViewingFile] = useState(null);
 
   // --- Form State ---
@@ -49,7 +59,7 @@ const ProvisionForm = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [emojis, setEmojis] = useState([]);
 
-  // Check for existing token
+  // --- Initialization ---
   useEffect(() => {
     const token = localStorage.getItem('token');
     const user = localStorage.getItem('user');
@@ -59,27 +69,36 @@ const ProvisionForm = () => {
     }
   }, []);
 
-  // Emoji effect
   useEffect(() => {
     const initialEmojis = Array.from({ length: 15 }, createRandomEmoji);
     setEmojis(initialEmojis);
     const intervalId = setInterval(() => {
-      const newBatch = Array.from({ length: 3 }, createRandomEmoji);
       setEmojis(prev => {
-        const next = [...prev, ...newBatch];
+        const next = [...prev, ...Array.from({ length: 3 }, createRandomEmoji)];
         return next.length > 50 ? next.slice(10) : next;
       });
     }, 1500);
     return () => clearInterval(intervalId);
   }, []);
 
-  // --- API Helpers ---
+  // Handle fireworks rendering
+  useEffect(() => {
+    let fwInterval;
+    if (showFireworks) {
+      setFireworksArr(Array.from({ length: 10 }, createFirework));
+      fwInterval = setInterval(() => {
+        setFireworksArr(Array.from({ length: 10 }, createFirework));
+      }, 800);
+    } else {
+      setFireworksArr([]);
+    }
+    return () => clearInterval(fwInterval);
+  }, [showFireworks]);
+
+  // --- Helpers & Validation ---
   const fetchWithAuth = async (url, options = {}) => {
     const token = localStorage.getItem('token');
-    const headers = {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    };
+    const headers = { 'Content-Type': 'application/json', ...options.headers };
     if (token) headers['Authorization'] = `Bearer ${token}`;
     
     const response = await fetch(url, { ...options, headers });
@@ -90,6 +109,22 @@ const ProvisionForm = () => {
     return response;
   };
 
+  const validatePasswordRules = (pwd, usernameToCompare) => {
+    if (pwd.length < 8 || pwd.length > 16) return "Password must be 8-16 characters.";
+    if (!/^[a-zA-Z0-9!@#$%^&*()_+=\-[\]{};':"\\|,.<>/?]*$/.test(pwd)) return "Only English characters and symbols allowed.";
+    if (!/[A-Z]/.test(pwd)) return "Must contain at least 1 uppercase letter.";
+    if (!/[a-z]/.test(pwd)) return "Must contain at least 1 lowercase letter.";
+    if (!/[0-9]/.test(pwd)) return "Must contain at least 1 number.";
+    if (usernameToCompare && pwd.toLowerCase().includes(usernameToCompare.toLowerCase())) return "Password cannot contain your username.";
+    return ""; // Valid
+  };
+
+  const PasswordRequirementsText = () => (
+    <div style={{ color: '#EF4444', fontSize: '11px', marginTop: '4px', lineHeight: '1.2' }}>
+      * Required: 8-16 chars, English only, min 1 uppercase, 1 lowercase, 1 number. Must not contain username.
+    </div>
+  );
+
   // --- Auth Handlers ---
   const handleAuthChange = (e) => setAuthData({ ...authData, [e.target.name]: e.target.value });
 
@@ -99,11 +134,21 @@ const ProvisionForm = () => {
     setIsLoggedIn(false);
     setCurrentUser(null);
     setCurrentView('form');
-    setSubmittedJson(null); // Clear success screen on logout
+    setSubmittedJson(null);
   };
 
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
+    
+    // Strict validation for registration
+    if (authMode === 'register') {
+      const pwdError = validatePasswordRules(authData.password, authData.username);
+      if (pwdError) {
+        setAuthMessage({ text: pwdError, type: 'error' });
+        return;
+      }
+    }
+
     setAuthMessage({ text: 'Processing...', type: 'info' });
     const endpoint = authMode === 'login' ? '/api/login' : '/api/register';
     
@@ -136,9 +181,9 @@ const ProvisionForm = () => {
     }
   };
 
-  // --- Profile Handlers ---
+  // --- Profile & Password Handlers ---
   const loadProfile = async () => {
-    setSubmittedJson(null); // Clear success screen when navigating to profile
+    setSubmittedJson(null);
     try {
       const res = await fetchWithAuth('/api/user/profile');
       const data = await res.json();
@@ -149,35 +194,65 @@ const ProvisionForm = () => {
     }
   };
 
-  const handleChangePassword = async (e) => {
+  const handlePwdChangeSubmit = async (e) => {
     e.preventDefault();
+    
+    if (passwordData.newPassword === passwordData.oldPassword) {
+      setPwdMessage({ text: 'New password cannot be identical to the current one.', type: 'error' });
+      return;
+    }
+
+    if (passwordData.newPassword !== passwordData.rePassword) {
+      setPwdMessage({ text: 'New passwords do not match.', type: 'error' });
+      return;
+    }
+
+    const pwdError = validatePasswordRules(passwordData.newPassword, currentUser?.username);
+    if (pwdError) {
+      setPwdMessage({ text: pwdError, type: 'error' });
+      return;
+    }
+
     setPwdMessage({ text: 'Updating...', type: 'info' });
     try {
       const res = await fetchWithAuth('/api/user/change-password', {
         method: 'POST',
-        body: JSON.stringify(passwordData)
+        body: JSON.stringify({ oldPassword: passwordData.oldPassword, newPassword: passwordData.newPassword })
       });
       const data = await res.json();
+      
       if (res.ok) {
-        setPwdMessage({ text: 'Password updated successfully!', type: 'success' });
-        setPasswordData({ oldPassword: '', newPassword: '' });
+        setPwdMessage({ text: 'Password reset successfully, logging out for reconnection...', type: 'success' });
+        setShowFireworks(true);
+        
+        // Wait 5 seconds, then logout and clean up
+        setTimeout(() => {
+          setShowFireworks(false);
+          setShowPwdModal(false);
+          setPasswordData({ oldPassword: '', newPassword: '', rePassword: '' });
+          setPwdMessage({ text: '', type: '' });
+          handleLogout();
+        }, 5000);
+
       } else {
-        setPwdMessage({ text: data.error, type: 'error' });
+        setPwdMessage({ text: data.error || 'Failed to update password.', type: 'error' });
       }
     } catch (e) {
-      setPwdMessage({ text: 'Error updating password', type: 'error' });
+      setPwdMessage({ text: 'Error updating password. Check network.', type: 'error' });
     }
   };
 
-  const fetchFileContent = async (fileId) => {
-    const res = await fetchWithAuth(`/api/user/file/${fileId}`);
+  // --- HERE IS THE UPDATED LOGGING BLOCK ---
+  const fetchFileContent = async (fileId, action = 'view') => {
+    // Adding the action query parameter so the backend knows what to log
+    const res = await fetchWithAuth(`/api/user/file/${fileId}?action=${action}`);
     if (!res.ok) throw new Error("Failed to fetch file");
     return await res.json();
   };
 
   const handleViewFile = async (fileId) => {
     try {
-      const fileData = await fetchFileContent(fileId);
+      const fileData = await fetchFileContent(fileId, 'view');
       setViewingFile(fileData);
     } catch (e) {
       alert("Could not load file content.");
@@ -186,7 +261,7 @@ const ProvisionForm = () => {
 
   const handleDownloadFile = async (fileId, fileName) => {
     try {
-      const fileData = await fetchFileContent(fileId);
+      const fileData = await fetchFileContent(fileId, 'download');
       const blob = new Blob([fileData.content], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -200,19 +275,20 @@ const ProvisionForm = () => {
       alert("Could not download file.");
     }
   };
+  // -----------------------------------------
 
-  // --- Form Handlers ---
+  // --- Provisioning Handlers ---
   const validateField = (name, value) => {
     let errorMsg = '';
     if (name === 'count') {
       const num = parseInt(value, 10);
-      if (isNaN(num) || num < 1 || num > 10) errorMsg = 'Count must be a number between 1 and 10.';
+      if (isNaN(num) || num < 1 || num > 10) errorMsg = 'Count must be between 1 and 10.';
     }
     if (name === 'baseName' && value.trim() === '') errorMsg = 'Base name cannot be empty.';
-    if (name === 'osKey' && value === '') errorMsg = 'Please select an operating system.';
-    if (name === 'typeChoice' && value === '') errorMsg = 'Please select an instance type.';
-    if (name === 'installScript' && value === '') errorMsg = 'Please select an installation script.';
-    if (name === 'infraType' && value !== 'json' && value !== 'terraform') errorMsg = 'Please select a valid infrastructure type.';
+    if (name === 'osKey' && value === '') errorMsg = 'Select an operating system.';
+    if (name === 'typeChoice' && value === '') errorMsg = 'Select an instance type.';
+    if (name === 'installScript' && value === '') errorMsg = 'Select an installation script.';
+    if (name === 'infraType' && value !== 'json' && value !== 'terraform') errorMsg = 'Select a valid infra type.';
     return errorMsg;
   };
 
@@ -243,23 +319,14 @@ const ProvisionForm = () => {
     setIsSubmitting(true);
     try {
       const timerPromise = new Promise(resolve => setTimeout(resolve, 3000));
-      const fetchPromise = fetchWithAuth('/api/provision', {
-        method: 'POST',
-        body: JSON.stringify(formData)
-      });
-
+      const fetchPromise = fetchWithAuth('/api/provision', { method: 'POST', body: JSON.stringify(formData) });
       const [response] = await Promise.all([fetchPromise, timerPromise]);
       const data = await response.json();
 
-      if (response.ok) {
-        setSubmittedJson(data.config);
-      } else {
-        alert('Server Error: ' + (data.error || 'Unknown error'));
-      }
+      if (response.ok) setSubmittedJson(data.config);
+      else alert('Server Error: ' + (data.error || 'Unknown error'));
     } catch (error) {
-      if (error.message !== "Unauthorized") {
-        alert('Network error. Could not connect to the backend server.');
-      }
+      if (error.message !== "Unauthorized") alert('Network error. Could not connect to the backend server.');
     } finally {
       setIsSubmitting(false);
     }
@@ -272,9 +339,9 @@ const ProvisionForm = () => {
     @keyframes pulseShadow { 0% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.4); } 70% { box-shadow: 0 0 0 15px rgba(79, 70, 229, 0); } 100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0); } }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     @keyframes emojiFallAndRoll { 0% { top: -10vh; opacity: 0; transform: rotate(0deg) translateX(0px); } 10% { opacity: 0.8; } 80% { opacity: 0.8; } 100% { top: 110vh; opacity: 0; transform: rotate(720deg) translateX(calc(15px * var(--emoji-wobble-dir, 1))); } }
+    @keyframes fireworkBurst { 0% { transform: scale(0.1); opacity: 1; } 50% { opacity: 1; } 100% { transform: scale(3); opacity: 0; } }
 
     .page-wrapper { position: absolute; top: 0; left: 0; width: 100vw; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: linear-gradient(135deg, #f6f8fd 0%, #f1f5f9 100%); padding: 40px; box-sizing: border-box; z-index: 1; }
-    
     .top-navbar { position: absolute; top: 0; left: 0; width: 100%; padding: 20px 40px; display: flex; justify-content: flex-end; align-items: center; box-sizing: border-box; z-index: 10; gap: 15px; }
     .nav-user-info { display: flex; align-items: center; gap: 15px; font-weight: 600; color: #374151; }
     .nav-btn { padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; border: none; transition: all 0.2s; }
@@ -298,6 +365,10 @@ const ProvisionForm = () => {
 
     .emoji-rain { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 0; }
     .falling-emoji { position: absolute; animation-name: emojiFallAndRoll; animation-iteration-count: 1; animation-timing-function: linear; animation-fill-mode: forwards; opacity: 0; }
+    
+    /* Fireworks Styles */
+    .firework-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 100; background: rgba(0,0,0,0.4); }
+    .firework { position: absolute; font-size: 4rem; animation: fireworkBurst ease-out forwards; }
 
     .form-container { width: 100%; max-width: 1200px; background: white; padding: 60px; border-radius: 24px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.1); animation: fadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; z-index: 2; margin-top: 40px; }
     .profile-container { max-width: 1000px; }
@@ -317,8 +388,7 @@ const ProvisionForm = () => {
     .spinner { border: 6px solid #F3F4F6; border-top: 6px solid #4F46E5; border-radius: 50%; width: 60px; height: 60px; animation: spin 1s linear infinite; margin-bottom: 24px; }
     .loading-text { font-size: 24px; color: #4F46E5; font-weight: 700; animation: fadeIn 1s infinite alternate; }
 
-    /* Profile Specific Styles */
-    .profile-header { border-bottom: 2px solid #E5E7EB; padding-bottom: 20px; margin-bottom: 30px; }
+    .profile-header { border-bottom: 2px solid #E5E7EB; padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center;}
     .history-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
     .history-table th, .history-table td { padding: 15px; text-align: left; border-bottom: 1px solid #E5E7EB; }
     .history-table th { background-color: #F9FAFB; color: #374151; font-weight: 700; }
@@ -327,11 +397,10 @@ const ProvisionForm = () => {
     .btn-view { background: #EFF6FF; color: #3B82F6; }
     .btn-download { background: #ECFDF5; color: #10B981; }
 
-    /* Code Viewer */
     .code-viewer { background-color: #1E293B; color: #E2E8F0; padding: 20px; border-radius: 8px; overflow-x: auto; font-family: "Fira Code", monospace; white-space: pre-wrap; word-break: break-word; font-size: 14px; max-height: 60vh; overflow-y: auto;}
   `;
 
-  // --- Modal Renders ---
+  // --- Modals ---
   const renderAuthModal = () => {
     if (!showAuthModal) return null;
     return (
@@ -350,7 +419,11 @@ const ProvisionForm = () => {
                 <div className="input-group"><label>Email</label><input type="email" name="email" className="input-field" required value={authData.email} onChange={handleAuthChange} /></div>
               </>
             )}
-            <div className="input-group"><label>Password</label><input type="password" name="password" className="input-field" required value={authData.password} onChange={handleAuthChange} /></div>
+            <div className="input-group">
+              <label>Password</label>
+              <input type="password" name="password" className="input-field" required value={authData.password} onChange={handleAuthChange} />
+              {authMode === 'register' && <PasswordRequirementsText />}
+            </div>
             {authMode === 'register' && (
               <div className="input-group"><label>Confirm Password</label><input type="password" name="re_password" className="input-field" required value={authData.re_password} onChange={handleAuthChange} /></div>
             )}
@@ -361,12 +434,40 @@ const ProvisionForm = () => {
     );
   };
 
+  const renderChangePwdModal = () => {
+    if (!showPwdModal) return null;
+    return (
+      <div className="modal-overlay" onClick={() => !showFireworks && setShowPwdModal(false)}>
+        <div className="modal-content" onClick={e => e.stopPropagation()}>
+          <h2 style={{ marginTop: 0, color: '#111827' }}>Change Password</h2>
+          {pwdMessage.text && <div className={`auth-msg ${pwdMessage.type}`}>{pwdMessage.text}</div>}
+          <form onSubmit={handlePwdChangeSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+            <div className="input-group">
+              <label>Current Password</label>
+              <input type="password" required className="input-field" value={passwordData.oldPassword} onChange={e => setPasswordData({...passwordData, oldPassword: e.target.value})} disabled={showFireworks} />
+            </div>
+            <div className="input-group">
+              <label>New Password</label>
+              <input type="password" required className="input-field" value={passwordData.newPassword} onChange={e => setPasswordData({...passwordData, newPassword: e.target.value})} disabled={showFireworks} />
+              <PasswordRequirementsText />
+            </div>
+            <div className="input-group">
+              <label>Re-enter New Password</label>
+              <input type="password" required className="input-field" value={passwordData.rePassword} onChange={e => setPasswordData({...passwordData, rePassword: e.target.value})} disabled={showFireworks} />
+            </div>
+            <button type="submit" className="create-btn" disabled={showFireworks} style={{ marginTop: '10px', opacity: showFireworks ? 0.5 : 1 }}>Change Password</button>
+            {!showFireworks && <button type="button" className="nav-btn btn-secondary" onClick={() => setShowPwdModal(false)} style={{ marginTop: '5px' }}>Cancel</button>}
+          </form>
+        </div>
+      </div>
+    );
+  };
+
   const renderFileViewerModal = () => {
     if (!viewingFile) return null;
     let displayText = viewingFile.content;
     if (viewingFile.fileType === 'terraform' && typeof displayText === 'string') {
-        displayText = displayText.replace(/\\n/g, '\n');
-        if (displayText.startsWith('"') && displayText.endsWith('"')) displayText = displayText.slice(1, -1);
+        displayText = displayText.replace(/\\n/g, '\n').replace(/^"|"$/g, '');
     }
     return (
       <div className="modal-overlay" onClick={() => setViewingFile(null)}>
@@ -386,8 +487,13 @@ const ProvisionForm = () => {
   const renderProfile = () => (
     <div className="form-container profile-container">
       <div className="profile-header">
-        <h1 style={{ margin: 0, color: '#111827' }}>Personal Area</h1>
-        <p style={{ color: '#6B7280', margin: '10px 0 0 0' }}>Manage your account and deployment history.</p>
+        <div>
+          <h1 style={{ margin: 0, color: '#111827' }}>Personal Area</h1>
+          <p style={{ color: '#6B7280', margin: '10px 0 0 0' }}>Manage your account and deployment history.</p>
+        </div>
+        <button className="nav-btn btn-primary" onClick={() => { setPwdMessage({text:'', type:''}); setShowPwdModal(true); }}>
+          🔒 Change Password
+        </button>
       </div>
 
       <div className="form-grid" style={{ marginBottom: '40px' }}>
@@ -395,45 +501,19 @@ const ProvisionForm = () => {
         <div className="input-group"><label>Email Address</label><input type="text" className="input-field" value={profileData.email || ''} disabled /></div>
       </div>
 
-      <div style={{ backgroundColor: '#F9FAFB', padding: '20px', borderRadius: '12px', marginBottom: '40px' }}>
-        <h3 style={{ marginTop: 0, color: '#111827' }}>Change Password</h3>
-        {pwdMessage.text && <div className={`auth-msg ${pwdMessage.type}`}>{pwdMessage.text}</div>}
-        <form onSubmit={handleChangePassword} style={{ display: 'flex', gap: '20px', alignItems: 'flex-end' }}>
-          <div className="input-group" style={{ flex: 1 }}><label>Current Password</label><input type="password" required className="input-field" value={passwordData.oldPassword} onChange={e => setPasswordData({...passwordData, oldPassword: e.target.value})} /></div>
-          <div className="input-group" style={{ flex: 1 }}><label>New Password</label><input type="password" required className="input-field" value={passwordData.newPassword} onChange={e => setPasswordData({...passwordData, newPassword: e.target.value})} /></div>
-          <button type="submit" className="nav-btn btn-primary" style={{ padding: '18px 24px' }}>Update</button>
-        </form>
-      </div>
-
       <h3>Deployment History</h3>
       {profileData.files && profileData.files.length > 0 ? (
         <div style={{ overflowX: 'auto' }}>
           <table className="history-table">
-            <thead>
-              <tr>
-                <th>File Name</th>
-                <th>Type</th>
-                <th>Created At</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
+            <thead><tr><th>File Name</th><th>Type</th><th>Created At</th><th>Actions</th></tr></thead>
             <tbody>
               {profileData.files.map(file => {
                 const isTf = file.fileType === 'terraform';
-                const textColor = isTf ? '#7E22CE' : '#B45309'; // Purple for TF, Dark Yellow for JSON
-                
+                const textColor = isTf ? '#7E22CE' : '#B45309'; 
                 return (
                   <tr key={file.id}>
                     <td style={{ fontWeight: '700', color: textColor }}>{file.fileName}</td>
-                    <td>
-                      <span style={{ 
-                        backgroundColor: isTf ? '#E0E7FF' : '#FEF3C7', 
-                        padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', 
-                        color: isTf ? '#3730A3' : '#92400E' 
-                      }}>
-                        {file.fileType.toUpperCase()}
-                      </span>
-                    </td>
+                    <td><span style={{ backgroundColor: isTf ? '#E0E7FF' : '#FEF3C7', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', color: isTf ? '#3730A3' : '#92400E' }}>{file.fileType.toUpperCase()}</span></td>
                     <td style={{ fontWeight: '600', color: textColor }}>{file.createdAt}</td>
                     <td>
                       <button className="action-btn btn-view" onClick={() => handleViewFile(file.id)}>👁️ View</button>
@@ -466,41 +546,21 @@ const ProvisionForm = () => {
     </div>
   );
 
-  const renderSuccessScreen = () => {
-    let displayText = typeof submittedJson === 'string' 
-      ? submittedJson.replace(/\\n/g, '\n').replace(/^"|"$/g, '') 
-      : JSON.stringify(submittedJson, null, 2);
-      
-    return (
-      <div className="form-container" style={{ textAlign: 'center', maxWidth: '800px' }}>
-        <h2 style={{ color: '#10B981', fontSize: '36px', marginBottom: '24px' }}>Provisioning Complete!</h2>
-        <div className="code-viewer" style={{ textAlign: 'left' }}>{displayText}</div>
-        <button className="create-btn" onClick={() => setSubmittedJson(null)} style={{ marginTop: '30px' }}>Create New Batch</button>
-      </div>
-    );
-  };
-
-  const renderLoadingScreen = () => (
-    <div className="form-container loading-overlay">
-      <div className="spinner"></div>
-      <div className="loading-text">Provisioning...</div>
-      <span style={{fontSize: '16px', color: '#6B7280', fontWeight: 'normal', marginTop: '10px'}}>
-        Setting up instances & checking configurations
-      </span>
-    </div>
-  );
-
   // --- Main Return ---
   return (
     <div className="page-wrapper">
       <style>{styles}</style>
       
-      {/* Background Layer */}
-      <div className="emoji-rain">
-        {emojis.map(e => <span key={e.id} className="falling-emoji" style={e.style} aria-hidden="true">{e.char}</span>)}
-      </div>
+      {/* Background Layers */}
+      <div className="emoji-rain">{emojis.map(e => <span key={e.id} className="falling-emoji" style={e.style} aria-hidden="true">{e.char}</span>)}</div>
       
-      {/* ALWAYS VISIBLE Navbar */}
+      {showFireworks && (
+        <div className="firework-overlay">
+          {fireworksArr.map(f => <span key={f.id} className="firework" style={f.style}>🎆</span>)}
+        </div>
+      )}
+
+      {/* Navbar */}
       <div className="top-navbar">
         {isLoggedIn ? (
           <div className="nav-user-info">
@@ -519,17 +579,19 @@ const ProvisionForm = () => {
 
       {/* Modals */}
       {renderAuthModal()}
+      {renderChangePwdModal()}
       {renderFileViewerModal()}
 
       {/* Conditional Content Rendering */}
-      {isSubmitting 
-        ? renderLoadingScreen() 
-        : submittedJson 
-          ? renderSuccessScreen()
-          : currentView === 'profile' 
-            ? renderProfile() 
-            : renderMainForm()
-      }
+      {isSubmitting ? (
+        <div className="form-container loading-overlay"><div className="spinner"></div><div className="loading-text">Provisioning...</div></div>
+      ) : submittedJson ? (
+        <div className="form-container" style={{ textAlign: 'center', maxWidth: '800px' }}>
+          <h2 style={{ color: '#10B981', fontSize: '36px', marginBottom: '24px' }}>Provisioning Complete!</h2>
+          <div className="code-viewer" style={{ textAlign: 'left' }}>{typeof submittedJson === 'string' ? submittedJson.replace(/\\n/g, '\n').replace(/^"|"$/g, '') : JSON.stringify(submittedJson, null, 2)}</div>
+          <button className="create-btn" onClick={() => setSubmittedJson(null)} style={{ marginTop: '30px' }}>Create New Batch</button>
+        </div>
+      ) : currentView === 'profile' ? renderProfile() : renderMainForm()}
     </div>
   );
 };
