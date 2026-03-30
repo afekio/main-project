@@ -6,6 +6,4 @@ front
 docker-compose.yml
 GITGUB-URL.txt
 README.md
-vault-data
 pgdata
-README.md

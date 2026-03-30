@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import subprocess
 import html
@@ -9,6 +10,7 @@ from flask import Flask, request, jsonify
 from pydantic import ValidationError
 import jwt
 import datetime
+import hvac  # Added for Vault integration
 
 # Import DB and Models 
 from Src.db import db, User, DeploymentHistory
@@ -20,8 +22,59 @@ from Src.defs import load_os_data, generate_reservation_model, save_configuratio
 app = Flask(__name__)
 f_logger, c_logger = setup_loggers()
 
+# --- Vault Integration & Secrets Fetching ---
+def fetch_vault_credentials():
+    vault_addr = os.getenv('VAULT_ADDR', 'http://vault-prod-sim:8200')
+    vault_token = os.getenv('VAULT_TOKEN')
+    
+    if not vault_token:
+        print("CRITICAL: VAULT_TOKEN environment variable is missing.")
+        sys.exit(1)
+
+    client = hvac.Client(url=vault_addr, token=vault_token)
+    
+    print("Connecting to Vault to fetch DB credentials...")
+    retries = 30  # Wait for up to 5 minutes (30 * 10 seconds) for user to unseal Vault
+    
+    while retries > 0:
+        try:
+            if client.is_authenticated():
+                if client.sys.is_sealed():
+                    print(f"Vault is currently SEALED. Please unseal it via CLI. Retrying in 10s... ({retries} attempts left)")
+                else:
+                    # Vault is unsealed, fetch the secret
+                    secret_response = client.secrets.kv.v2.read_secret_version(
+                        mount_point='secret', 
+                        path='database',
+                        raise_on_deleted_version=True
+                    )
+                    creds = secret_response['data']['data']
+                    print("Successfully fetched DB credentials from Vault!")
+                    return creds['username'], creds['password']
+            else:
+                print("Vault authentication failed. Check your VAULT_TOKEN.")
+                sys.exit(1)
+                
+        except hvac.exceptions.InvalidPath:
+            print("CRITICAL: Secret path 'secret/data/database' not found in Vault. Did you create it?")
+            sys.exit(1)
+        except Exception as e:
+            print(f"Waiting for Vault connection... {e}")
+            
+        time.sleep(10)
+        retries -= 1
+
+    print("CRITICAL: Timed out waiting for Vault to be unsealed or ready.")
+    sys.exit(1)
+
+# Fetch credentials before initializing the DB
+db_user, db_pass = fetch_vault_credentials()
+db_name = os.getenv('POSTGRES_DB', 'provision_db')
+db_host = os.getenv('DB_HOST', 'db')
+
 # Database and Security configurations
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://admin:securepassword123@db:5432/provision_db'
+# Now using dynamic credentials retrieved from Vault
+app.config['SQLALCHEMY_DATABASE_URI'] = f'postgresql://{db_user}:{db_pass}@{db_host}:5432/{db_name}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = 'your-super-secret-jwt-key' 
 
@@ -44,7 +97,7 @@ with app.app_context():
             
     if retries == 0:
         print("CRITICAL: Could not connect to the database after multiple retries. Exiting.")
-        exit(1)
+        sys.exit(1)
 
 # --- Authentication Middleware ---
 def token_required(f):
@@ -124,7 +177,7 @@ def login():
             'user': {'username': user.username, 'fullName': user.full_name, 'email': user.email}
         }), 200
         
-    # Log failed login attempt (fixed indentation)
+    # Log failed login attempt
     f_logger.warning(f"Action: LOGIN | Status: FAILED | Attempted Username: {data.get('username')}")
     return jsonify({'error': 'Invalid username or password'}), 401
 

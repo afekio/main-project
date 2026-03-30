@@ -5,6 +5,9 @@ services:
     restart: always
     ports:
       - "5000:5000"
+    environment:
+      VAULT_ADDR: http://vault-prod-sim:8200
+      VAULT_TOKEN: ${VAULT_TOKEN}
     volumes:
       - ./Logs:/app/Logs
       - ./Configs:/app/Configs
@@ -19,13 +22,47 @@ services:
       - backend
 
 
+  vault:
+    image: hashicorp/vault:latest
+    container_name: vault-prod-sim
+    ports:
+      - "8200:8200"
+    environment:
+      # Inject configuration directly using JSON format
+      VAULT_LOCAL_CONFIG: '{"storage": {"file": {"path": "/vault/file"}}, "listener": {"tcp": {"address": "0.0.0.0:8200", "tls_disable": 1}}, "ui": true}'
+      VAULT_ADDR: http://vault-prod-sim:8200
+      SEAL_KEY1: ${SEAL_KEY1}
+      SEAL_KEY2: ${SEAL_KEY2}
+      SEAL_KEY3: ${SEAL_KEY3}
+    volumes:
+      # Single volume for persistent data storage
+      - ./vault-data:/vault/file
+    cap_add:
+      # Required to prevent memory swapping to disk
+      - IPC_LOCK
+    command: >
+      sh -c '
+      echo "{\"storage\": {\"file\": {\"path\": \"/vault/file\"}}, \"listener\": {\"tcp\": {\"address\": \"0.0.0.0:8200\", \"tls_disable\": 1}}, \"ui\": true}" > /vault/config/local.json;
+      
+      (
+        echo "Waiting for Vault to start...";
+        sleep 5;
+        vault operator unseal "$$SEAL_KEY1";
+        vault operator unseal "$$SEAL_KEY2";
+        vault operator unseal "$$SEAL_KEY3";
+        echo "Vault unseal process complete.";
+      ) &
+      exec vault server -config=/vault/config/local.json
+      '
+
+
   db:
     image: postgres:15-alpine
     restart: always
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: securepassword123
-      POSTGRES_DB: provision_db
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
@@ -33,3 +70,8 @@ services:
 
 volumes:
    pgdata:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /home/ubuntu/AWS_Project/pgdata
