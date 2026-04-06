@@ -1,4 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+
+// --- Sound Effect Paths ---
+const SUCCESS_SOUND_PATH = '/usr/share/nginx/Effects/weeee.mp3';
+const ERROR_SOUND_PATH = '/usr/share/nginx/Effects/weeee2.mp3';
 
 // --- Emoji Bank & Helper ---
 const EMOJI_BANK = [
@@ -32,6 +36,20 @@ const createFirework = () => ({
 });
 
 const ProvisionForm = () => {
+  // --- Audio Refs ---
+  const successAudioRef = useRef(null);
+  const errorAudioRef = useRef(null);
+
+  // פונקציית הניגון המעודכנת שמשתמשת ב-Refs
+  const playSound = (type) => {
+    const audioEl = type === 'success' ? successAudioRef.current : errorAudioRef.current;
+    if (audioEl) {
+      audioEl.currentTime = 0; // החזר להתחלה
+      // שימוש ב-catch למקרה שהדפדפן עדיין חוסם, כדי שהאפליקציה לא תקרוס
+      audioEl.play().catch(e => console.warn("Audio playback issue:", e.message));
+    }
+  };
+
   // --- Auth & User State ---
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
@@ -144,6 +162,7 @@ const ProvisionForm = () => {
     if (authMode === 'register') {
       const pwdError = validatePasswordRules(authData.password, authData.username);
       if (pwdError) {
+        playSound('error');
         setAuthMessage({ text: pwdError, type: 'error' });
         return;
       }
@@ -161,6 +180,7 @@ const ProvisionForm = () => {
       const data = await response.json();
 
       if (response.ok) {
+        playSound('success');
         if (authMode === 'login') {
           localStorage.setItem('token', data.token);
           localStorage.setItem('user', JSON.stringify(data.user));
@@ -174,9 +194,11 @@ const ProvisionForm = () => {
           setAuthMode('login');
         }
       } else {
+        playSound('error');
         setAuthMessage({ text: data.error || 'Authentication failed', type: 'error' });
       }
     } catch (err) {
+      playSound('error');
       setAuthMessage({ text: 'Network error. Cannot reach backend.', type: 'error' });
     }
   };
@@ -191,6 +213,7 @@ const ProvisionForm = () => {
       setCurrentView('profile');
     } catch (e) {
       console.error("Failed to load profile", e);
+      playSound('error');
     }
   };
 
@@ -198,17 +221,20 @@ const ProvisionForm = () => {
     e.preventDefault();
     
     if (passwordData.newPassword === passwordData.oldPassword) {
+      playSound('error');
       setPwdMessage({ text: 'New password cannot be identical to the current one.', type: 'error' });
       return;
     }
 
     if (passwordData.newPassword !== passwordData.rePassword) {
+      playSound('error');
       setPwdMessage({ text: 'New passwords do not match.', type: 'error' });
       return;
     }
 
     const pwdError = validatePasswordRules(passwordData.newPassword, currentUser?.username);
     if (pwdError) {
+      playSound('error');
       setPwdMessage({ text: pwdError, type: 'error' });
       return;
     }
@@ -222,6 +248,7 @@ const ProvisionForm = () => {
       const data = await res.json();
       
       if (res.ok) {
+        playSound('success');
         setPwdMessage({ text: 'Password reset successfully, logging out for reconnection...', type: 'success' });
         setShowFireworks(true);
         
@@ -235,16 +262,16 @@ const ProvisionForm = () => {
         }, 5000);
 
       } else {
+        playSound('error');
         setPwdMessage({ text: data.error || 'Failed to update password.', type: 'error' });
       }
     } catch (e) {
+      playSound('error');
       setPwdMessage({ text: 'Error updating password. Check network.', type: 'error' });
     }
   };
 
-  // --- HERE IS THE UPDATED LOGGING BLOCK ---
   const fetchFileContent = async (fileId, action = 'view') => {
-    // Adding the action query parameter so the backend knows what to log
     const res = await fetchWithAuth(`/api/user/file/${fileId}?action=${action}`);
     if (!res.ok) throw new Error("Failed to fetch file");
     return await res.json();
@@ -255,6 +282,7 @@ const ProvisionForm = () => {
       const fileData = await fetchFileContent(fileId, 'view');
       setViewingFile(fileData);
     } catch (e) {
+      playSound('error');
       alert("Could not load file content.");
     }
   };
@@ -272,10 +300,10 @@ const ProvisionForm = () => {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (e) {
+      playSound('error');
       alert("Could not download file.");
     }
   };
-  // -----------------------------------------
 
   // --- Provisioning Handlers ---
   const validateField = (name, value) => {
@@ -300,7 +328,9 @@ const ProvisionForm = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
     if (!isLoggedIn) {
+      playSound('error');
       setShowAuthModal(true);
       return;
     }
@@ -312,6 +342,7 @@ const ProvisionForm = () => {
     });
 
     if (Object.keys(newErrors).length > 0) {
+      playSound('error');
       setErrors(newErrors);
       return;
     }
@@ -323,10 +354,18 @@ const ProvisionForm = () => {
       const [response] = await Promise.all([fetchPromise, timerPromise]);
       const data = await response.json();
 
-      if (response.ok) setSubmittedJson(data.config);
-      else alert('Server Error: ' + (data.error || 'Unknown error'));
+      if (response.ok) {
+        playSound('success');
+        setSubmittedJson(data.config);
+      } else {
+        playSound('error');
+        alert('Server Error: ' + (data.error || 'Unknown error'));
+      }
     } catch (error) {
-      if (error.message !== "Unauthorized") alert('Network error. Could not connect to the backend server.');
+      if (error.message !== "Unauthorized") {
+        playSound('error');
+        alert('Network error. Could not connect to the backend server.');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -551,6 +590,10 @@ const ProvisionForm = () => {
     <div className="page-wrapper">
       <style>{styles}</style>
       
+      {/* פה נמצאים אלמנטים האודיו הנסתרים שלנו - הם נטענים אוטומטית כשהדף עולה */}
+      <audio ref={successAudioRef} src={SUCCESS_SOUND_PATH} preload="auto" />
+      <audio ref={errorAudioRef} src={ERROR_SOUND_PATH} preload="auto" />
+
       {/* Background Layers */}
       <div className="emoji-rain">{emojis.map(e => <span key={e.id} className="falling-emoji" style={e.style} aria-hidden="true">{e.char}</span>)}</div>
       
